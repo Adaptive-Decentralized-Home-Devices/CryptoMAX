@@ -1,11 +1,14 @@
-"""Simple script to collect crypto staking interest rates from public APIs.
+"""
+Simple script to collect crypto staking interest rates from public APIs.
 
 The script queries a collection of well known staking providers (Lido, Rocket
 Pool, Kraken, Coinbase, Crypto.com, KuCoin, Binance, and Nexo), normalizes the
-responses, persists the data as JSON, and prints an ASCII table so you can
+responses, persists the data as JSON, and prints an ASCII table so you can 
 quickly inspect the advertised APR or APY for each network. Pass ``--low-risk``
 to label the output for a "Low Risk" button or option and filter the table to
 listings that reference well known stablecoins.
+=======
+quickly inspect the advertised APR or APY for each network.
 """
 
 from __future__ import annotations
@@ -44,6 +47,7 @@ DEFAULT_HEADERS = {
     "Accept": "application/json",
 }
 
+codex/update-readme-for-python-project-xl6t1u
 STABLECOIN_KEYWORDS = {
     "USDC",
     "USDT",
@@ -59,7 +63,7 @@ STABLECOIN_KEYWORDS = {
     "EURS",
     "LUSD",
 }
-
+ main
 
 def _fetch_json(url: str, headers: Optional[Dict[str, str]] = None) -> object:
     merged_headers = dict(DEFAULT_HEADERS)
@@ -420,6 +424,7 @@ def save_rates(records: Iterable[RateRecord], output_path: Path) -> None:
     output_path.write_text(json.dumps(serialized, indent=2) + "\n")
 
 
+codex/update-readme-for-python-project-xl6t1u
 def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -457,6 +462,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     save_rates(records, Path("staking_rates.json"))
     if args.low_risk:
         print("Low-Risk Stablecoin View\n")
+
+def main() -> None:
+    records = collect_rates()
+    save_rates(records, Path("staking_rates.json"))
+    
+main
     print(format_table(records))
 
 
