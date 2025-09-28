@@ -1,12 +1,9 @@
 """Simple script to collect crypto staking interest rates from public APIs.
 
-The script queries a handful of well known staking providers and prints the
-latest advertised APY or APR figures.  Each provider exposes its data through a
-small REST endpoint, so the script only depends on the standard library and the
-`requests` package for HTTP requests.
-
-The goal of this program is to provide a very small example of how someone can
-pull staking information from the wider internet in a repeatable way.
+The script queries a collection of well known staking providers (Lido, Rocket
+Pool, Kraken, Coinbase, Crypto.com, KuCoin, Binance, and Nexo), normalizes the
+responses, persists the data as JSON, and prints an ASCII table so you can
+quickly inspect the advertised APR or APY for each network.
 """
 
 from __future__ import annotations
@@ -14,7 +11,8 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
-from typing import Callable, Dict, Iterable, List, Optional
+from pathlib import Path
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 
 import requests
 
@@ -38,8 +36,17 @@ class RateFetchError(RuntimeError):
 ProviderFetcher = Callable[[], Iterable[RateRecord]]
 
 
-def _fetch_json(url: str, headers: Optional[Dict[str, str]] = None) -> Dict[str, object]:
-    response = requests.get(url, headers=headers or {"User-Agent": "CryptoMAX Staking Bot"}, timeout=15)
+DEFAULT_HEADERS = {
+    "User-Agent": "CryptoMAX Staking Bot",
+    "Accept": "application/json",
+}
+
+
+def _fetch_json(url: str, headers: Optional[Dict[str, str]] = None) -> object:
+    merged_headers = dict(DEFAULT_HEADERS)
+    if headers:
+        merged_headers.update(headers)
+    response = requests.get(url, headers=merged_headers, timeout=15)
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:  # pragma: no cover - defensive logging path
@@ -107,6 +114,205 @@ def fetch_rocket_pool() -> Iterable[RateRecord]:
     )
 
 
+def _normalize_percentage(raw_value: object) -> Optional[float]:
+    """Convert a raw numeric rate to a human friendly percentage."""
+
+    if raw_value is None:
+        return None
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    if value <= 1:
+        value *= 100
+    return value
+
+
+def _pick_first(mapping: Mapping[str, object], keys: Sequence[str]) -> Optional[object]:
+    for key in keys:
+        if key in mapping:
+            return mapping[key]
+    return None
+
+
+def fetch_coinbase() -> Iterable[RateRecord]:
+    """Fetch staking APYs from Coinbase's staking product catalog."""
+
+    url = "https://api.coinbase.com/v2/staking/products"
+    payload = _fetch_json(url, headers={"CB-VERSION": "2024-01-01"})
+    products = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(products, list):
+        raise RateFetchError("Unexpected Coinbase payload format")
+
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        rate_value = _normalize_percentage(
+            _pick_first(
+                product,
+                ("apy", "apr", "rewards_apy", "estimated_apy", "rewardRate", "rewardsRate"),
+            )
+        )
+        if rate_value is None:
+            continue
+        network = _pick_first(
+            product,
+            ("asset_name", "asset", "name", "asset_symbol"),
+        )
+        yield RateRecord(
+            provider="Coinbase",
+            network=str(network or "Unknown"),
+            rate=rate_value,
+            metric="apy",
+            source_url=url,
+            raw=product,
+        )
+
+
+def fetch_crypto_com() -> Iterable[RateRecord]:
+    """Fetch staking rates from Crypto.com's Earn product catalog."""
+
+    url = "https://crypto.com/earn/api/v2/products"
+    payload = _fetch_json(url)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    products = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(products, list):
+        raise RateFetchError("Unexpected Crypto.com payload format")
+
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        rate_value = _normalize_percentage(
+            _pick_first(
+                product,
+                ("rate", "apy", "apr", "reward_rate"),
+            )
+        )
+        if rate_value is None:
+            continue
+        network = _pick_first(
+            product,
+            ("displayName", "asset", "symbol", "name"),
+        )
+        yield RateRecord(
+            provider="Crypto.com",
+            network=str(network or "Unknown"),
+            rate=rate_value,
+            metric="apy",
+            source_url=url,
+            raw=product,
+        )
+
+
+def fetch_kucoin() -> Iterable[RateRecord]:
+    """Fetch staking rates from KuCoin's Earn catalog."""
+
+    url = "https://www.kucoin.com/_api/earning/earn/product/list?page=1&pageSize=200&status=ALL&type=ALL"
+    payload = _fetch_json(url)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    products = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(products, list):
+        raise RateFetchError("Unexpected KuCoin payload format")
+
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        rate_value = _normalize_percentage(
+            _pick_first(
+                product,
+                ("apr", "apy", "yieldRate", "rate"),
+            )
+        )
+        if rate_value is None:
+            continue
+        network = _pick_first(
+            product,
+            ("currency", "name", "displayName"),
+        )
+        yield RateRecord(
+            provider="KuCoin",
+            network=str(network or "Unknown"),
+            rate=rate_value,
+            metric="apr",
+            source_url=url,
+            raw=product,
+        )
+
+
+def fetch_binance() -> Iterable[RateRecord]:
+    """Fetch flexible staking (BNB) rates from Binance."""
+
+    url = "https://www.binance.com/bapi/earn/v2/friendly/pos/product/list"
+    payload = _fetch_json(url)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        raise RateFetchError("Unexpected Binance payload format")
+    products = data.get("result") or data.get("data") or []
+    if not isinstance(products, list):
+        raise RateFetchError("Unexpected Binance product payload")
+
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        rate_value = _normalize_percentage(
+            _pick_first(
+                product,
+                ("configAnnualInterestRate", "apr", "apy", "maxApy"),
+            )
+        )
+        if rate_value is None:
+            continue
+        network = _pick_first(
+            product,
+            ("asset", "productName", "displayName"),
+        )
+        yield RateRecord(
+            provider="Binance",
+            network=str(network or "Unknown"),
+            rate=rate_value,
+            metric="apr",
+            source_url=url,
+            raw=product,
+        )
+
+
+def fetch_nexo() -> Iterable[RateRecord]:
+    """Fetch staking (earn) rates from Nexo."""
+
+    url = "https://platform.nexo.io/api/v2/earn/rates"
+    payload = _fetch_json(url)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    products = data.get("rates") if isinstance(data, dict) else None
+    if not isinstance(products, list):
+        raise RateFetchError("Unexpected Nexo payload format")
+
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        base_rate = _normalize_percentage(
+            _pick_first(
+                product,
+                ("rate", "apy", "apr", "baseRate"),
+            )
+        )
+        if base_rate is None:
+            continue
+        network = _pick_first(
+            product,
+            ("currency", "symbol", "name"),
+        )
+        yield RateRecord(
+            provider="Nexo",
+            network=str(network or "Unknown"),
+            rate=base_rate,
+            metric="apy",
+            source_url=url,
+            raw=product,
+        )
+
+
 def fetch_kraken() -> Iterable[RateRecord]:
     """Fetch staking rates from Kraken."""
 
@@ -142,6 +348,11 @@ PROVIDERS: Dict[str, ProviderFetcher] = {
     "lido": fetch_lido,
     "rocket_pool": fetch_rocket_pool,
     "kraken": fetch_kraken,
+    "coinbase": fetch_coinbase,
+    "crypto_com": fetch_crypto_com,
+    "kucoin": fetch_kucoin,
+    "binance": fetch_binance,
+    "nexo": fetch_nexo,
 }
 
 
@@ -183,8 +394,16 @@ def format_table(records: Iterable[RateRecord]) -> str:
     return "\n".join(lines)
 
 
+def save_rates(records: Iterable[RateRecord], output_path: Path) -> None:
+    """Persist normalized staking rates to disk for later processing."""
+
+    serialized = [dataclasses.asdict(record) for record in records]
+    output_path.write_text(json.dumps(serialized, indent=2) + "\n")
+
+
 def main() -> None:
     records = collect_rates()
+    save_rates(records, Path("staking_rates.json"))
     print(format_table(records))
 
 

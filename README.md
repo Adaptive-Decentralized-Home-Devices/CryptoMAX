@@ -1,6 +1,6 @@
 # CryptoMAX
 
-CryptoMAX is a lightweight Python script that compares staking yields across a few well known Ethereum staking providers. It queries public APIs for Lido, Rocket Pool, and Kraken, normalizes the responses, and prints a console table so you can quickly spot the advertised APR or APY for each network.
+CryptoMAX is a lightweight Python script that compares staking yields across a broad set of centralized providers. It queries public APIs for Lido, Rocket Pool, Kraken, Coinbase, Crypto.com, KuCoin, Binance, and Nexo, normalizes the responses, stores the normalized payloads on disk, and prints a console table so you can quickly spot the advertised APR or APY for each network.
 
 ## Prerequisites
 
@@ -25,9 +25,12 @@ After installing dependencies, run the script directly:
 python staking_rates.py
 ```
 
-The script fetches rates from each provider and renders a table with the following columns:
+Each execution produces two outputs:
 
-- **Provider** – The staking platform (Lido, Rocket Pool, Kraken).
+1. A JSON snapshot saved to `staking_rates.json` containing normalized rate entries for every successful provider query. You can feed this file into other automation later without refetching the upstream APIs.
+2. A console table summarizing the most recent rates. The table includes the following columns:
+
+- **Provider** – The staking platform (for example Lido, Coinbase, Binance).
 - **Network** – The blockchain or asset associated with the rate.
 - **Rate** – The advertised percentage formatted to two decimals.
 - **Metric** – Whether the rate is expressed as APR or APY.
@@ -37,11 +40,16 @@ If no rates can be retrieved, the script prints `No staking rates available.` in
 
 ## Data Sources
 
-| Provider     | Endpoint                                                  | Notes |
-|--------------|-----------------------------------------------------------|-------|
-| Lido         | `https://stake.lido.fi/api/networks`                       | Returns APY or APR per supported Lido network. |
-| Rocket Pool  | `https://api.rocketpool.net/api/apr`                       | Supplies the current Ethereum staking APR. |
-| Kraken       | `https://api.kraken.com/0/public/Staking/Assets`           | Lists supported staking assets with APR/APY figures. |
+| Provider     | Endpoint                                                             | Notes |
+|--------------|----------------------------------------------------------------------|-------|
+| Lido         | `https://stake.lido.fi/api/networks`                                  | Returns APY or APR per supported Lido network. |
+| Rocket Pool  | `https://api.rocketpool.net/api/apr`                                  | Supplies the current Ethereum staking APR. |
+| Kraken       | `https://api.kraken.com/0/public/Staking/Assets`                      | Lists supported staking assets with APR/APY figures. |
+| Coinbase     | `https://api.coinbase.com/v2/staking/products`                        | Catalog of Coinbase staking assets and their quoted APYs. |
+| Crypto.com   | `https://crypto.com/earn/api/v2/products`                             | Earn product inventory with reward rates. |
+| KuCoin       | `https://www.kucoin.com/_api/earning/earn/product/list`               | KuCoin Earn listings including flexible and fixed terms. |
+| Binance      | `https://www.binance.com/bapi/earn/v2/friendly/pos/product/list`      | Binance savings and staking rates for supported tokens. |
+| Nexo         | `https://platform.nexo.io/api/v2/earn/rates`                          | Nexo earn rates for supported assets. |
 
 ## Script Structure
 
@@ -53,11 +61,11 @@ The core logic is organized into a few small, composable helpers:
 
 ### Provider-specific collectors
 
-`fetch_lido`, `fetch_rocket_pool`, and `fetch_kraken` wrap `_fetch_json`, interpret the provider-specific payloads, and yield standardized `RateRecord` instances. Each function isolates any response shape quirks so failures in one provider do not affect the others.
+`fetch_lido`, `fetch_rocket_pool`, `fetch_kraken`, `fetch_coinbase`, `fetch_crypto_com`, `fetch_kucoin`, `fetch_binance`, and `fetch_nexo` wrap `_fetch_json`, interpret the provider-specific payloads, and yield standardized `RateRecord` instances. Each function isolates any response shape quirks so failures in one provider do not affect the others.
 
 ### Normalization
 
-`RateRecord` is a dataclass that captures the provider name, network, percentage value, rate metric (APR or APY), and the originating URL along with the raw payload snippet. The `collect_rates` function iterates through all registered providers, aggregating the resulting `RateRecord` items while printing a warning if any provider raises an exception.
+`RateRecord` is a dataclass that captures the provider name, network, percentage value, rate metric (APR or APY), and the originating URL along with the raw payload snippet. The `collect_rates` function iterates through all registered providers, aggregating the resulting `RateRecord` items while printing a warning if any provider raises an exception. The `save_rates` helper writes the normalized list to `staking_rates.json` so other tooling can reuse the snapshot without hitting the upstream APIs again.
 
 ### Table rendering
 
