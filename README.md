@@ -1,14 +1,4 @@
-index d5d71f70ad4cbd3990396904b102597a7b3127cc..3d484cd17b52f2fa63f19dd8d2cc53f4172168cb 100644
---- a/README.md
-+++ b/README.md
-@@ -1,199 +1,68 @@
-+# CryptoMAX
- 
--diff --git a/README.md b/README.md
--index 2bf7f3025d1b33ec1a5c9ce205e81c4cece4f911..9f9be67c18c46fd6759cf866d2dc33500600a3d7 100644
----- a/README.md
--+++ b/README.md
--@@ -1,124 +1,69 @@
+
 ---This Android app helps users explore and compare **staking interest rates** for cryptocurrencies across reputable exchanges based on their **risk tolerance** (Low, Medium, High).
 --+CryptoMAX provides a multithreaded Java data ingestion pipeline that gathers exchange listings, 
 --+current gas fee estimates, and staking APR/APY snapshots. The scraper persists the normalized 
