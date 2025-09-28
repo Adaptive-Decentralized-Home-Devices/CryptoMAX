@@ -1,4 +1,3 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/README.md b/README.md
 index d5d71f70ad4cbd3990396904b102597a7b3127cc..3d484cd17b52f2fa63f19dd8d2cc53f4172168cb 100644
 --- a/README.md
@@ -270,6 +269,3 @@ index d5d71f70ad4cbd3990396904b102597a7b3127cc..3d484cd17b52f2fa63f19dd8d2cc53f4
 +## License
 +
 +This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
- 
-EOF
-)
