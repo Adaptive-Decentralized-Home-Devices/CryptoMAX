@@ -1,13 +1,19 @@
-"""Simple script to collect crypto staking interest rates from public APIs.
+"""
+Simple script to collect crypto staking interest rates from public APIs.
 
 The script queries a collection of well known staking providers (Lido, Rocket
 Pool, Kraken, Coinbase, Crypto.com, KuCoin, Binance, and Nexo), normalizes the
-responses, persists the data as JSON, and prints an ASCII table so you can
+responses, persists the data as JSON, and prints an ASCII table so you can 
+quickly inspect the advertised APR or APY for each network. Pass ``--low-risk``
+to label the output for a "Low Risk" button or option and filter the table to
+listings that reference well known stablecoins.
+=======
 quickly inspect the advertised APR or APY for each network.
 """
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import json
 import sys
@@ -41,6 +47,23 @@ DEFAULT_HEADERS = {
     "Accept": "application/json",
 }
 
+codex/update-readme-for-python-project-xl6t1u
+STABLECOIN_KEYWORDS = {
+    "USDC",
+    "USDT",
+    "DAI",
+    "BUSD",
+    "TUSD",
+    "USDP",
+    "GUSD",
+    "USDD",
+    "USTC",
+    "EURT",
+    "FRAX",
+    "EURS",
+    "LUSD",
+}
+ main
 
 def _fetch_json(url: str, headers: Optional[Dict[str, str]] = None) -> object:
     merged_headers = dict(DEFAULT_HEADERS)
@@ -401,9 +424,50 @@ def save_rates(records: Iterable[RateRecord], output_path: Path) -> None:
     output_path.write_text(json.dumps(serialized, indent=2) + "\n")
 
 
+codex/update-readme-for-python-project-xl6t1u
+def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Fetch staking rates from major exchanges and optionally focus on "
+            "stablecoin-oriented, lower-risk listings."
+        )
+    )
+    parser.add_argument(
+        "--low-risk",
+        action="store_true",
+        help=(
+            "Filter results to listings whose network name references a known "
+            "stablecoin (for example USDC, USDT, or DAI)."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def _is_stablecoin_network(name: str) -> bool:
+    normalized = name.upper()
+    return any(keyword in normalized for keyword in STABLECOIN_KEYWORDS)
+
+
+def filter_low_risk(records: Iterable[RateRecord]) -> List[RateRecord]:
+    """Return only records that appear to reference stablecoin staking products."""
+
+    return [record for record in records if _is_stablecoin_network(record.network)]
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = _parse_args(argv)
+    records = collect_rates()
+    if args.low_risk:
+        records = filter_low_risk(records)
+    save_rates(records, Path("staking_rates.json"))
+    if args.low_risk:
+        print("Low-Risk Stablecoin View\n")
+
 def main() -> None:
     records = collect_rates()
     save_rates(records, Path("staking_rates.json"))
+    
+main
     print(format_table(records))
 
 
