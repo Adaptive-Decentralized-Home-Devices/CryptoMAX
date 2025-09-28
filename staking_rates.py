@@ -18,7 +18,7 @@ import dataclasses
 import json
 import sys
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import requests
 
@@ -153,11 +153,22 @@ def _normalize_percentage(raw_value: object) -> Optional[float]:
     return value
 
 
-def _pick_first(mapping: Mapping[str, object], keys: Sequence[str]) -> Optional[object]:
+def _pick_first(
+    mapping: Mapping[str, object], keys: Sequence[str]
+) -> Optional[Tuple[str, object]]:
     for key in keys:
         if key in mapping:
-            return mapping[key]
+            return key, mapping[key]
     return None
+
+
+def _metric_from_key(key: str) -> str:
+    lowered = key.lower()
+    if "apy" in lowered:
+        return "apy"
+    if "apr" in lowered:
+        return "apr"
+    return "apr"
 
 
 def fetch_coinbase() -> Iterable[RateRecord]:
@@ -172,23 +183,25 @@ def fetch_coinbase() -> Iterable[RateRecord]:
     for product in products:
         if not isinstance(product, dict):
             continue
-        rate_value = _normalize_percentage(
-            _pick_first(
-                product,
-                ("apy", "apr", "rewards_apy", "estimated_apy", "rewardRate", "rewardsRate"),
-            )
+        rate_entry = _pick_first(
+            product,
+            ("apy", "apr", "rewards_apy", "estimated_apy", "rewardRate", "rewardsRate"),
         )
+        if not rate_entry:
+            continue
+        rate_key, raw_rate = rate_entry
+        rate_value = _normalize_percentage(raw_rate)
         if rate_value is None:
             continue
-        network = _pick_first(
+        network_entry = _pick_first(
             product,
             ("asset_name", "asset", "name", "asset_symbol"),
         )
         yield RateRecord(
             provider="Coinbase",
-            network=str(network or "Unknown"),
+            network=str((network_entry[1] if network_entry else None) or "Unknown"),
             rate=rate_value,
-            metric="apy",
+            metric=_metric_from_key(rate_key),
             source_url=url,
             raw=product,
         )
@@ -207,23 +220,25 @@ def fetch_crypto_com() -> Iterable[RateRecord]:
     for product in products:
         if not isinstance(product, dict):
             continue
-        rate_value = _normalize_percentage(
-            _pick_first(
-                product,
-                ("rate", "apy", "apr", "reward_rate"),
-            )
+        rate_entry = _pick_first(
+            product,
+            ("rate", "apy", "apr", "reward_rate"),
         )
+        if not rate_entry:
+            continue
+        rate_key, raw_rate = rate_entry
+        rate_value = _normalize_percentage(raw_rate)
         if rate_value is None:
             continue
-        network = _pick_first(
+        network_entry = _pick_first(
             product,
             ("displayName", "asset", "symbol", "name"),
         )
         yield RateRecord(
             provider="Crypto.com",
-            network=str(network or "Unknown"),
+            network=str((network_entry[1] if network_entry else None) or "Unknown"),
             rate=rate_value,
-            metric="apy",
+            metric=_metric_from_key(rate_key),
             source_url=url,
             raw=product,
         )
@@ -242,23 +257,25 @@ def fetch_kucoin() -> Iterable[RateRecord]:
     for product in products:
         if not isinstance(product, dict):
             continue
-        rate_value = _normalize_percentage(
-            _pick_first(
-                product,
-                ("apr", "apy", "yieldRate", "rate"),
-            )
+        rate_entry = _pick_first(
+            product,
+            ("apr", "apy", "yieldRate", "rate"),
         )
+        if not rate_entry:
+            continue
+        rate_key, raw_rate = rate_entry
+        rate_value = _normalize_percentage(raw_rate)
         if rate_value is None:
             continue
-        network = _pick_first(
+        network_entry = _pick_first(
             product,
             ("currency", "name", "displayName"),
         )
         yield RateRecord(
             provider="KuCoin",
-            network=str(network or "Unknown"),
+            network=str((network_entry[1] if network_entry else None) or "Unknown"),
             rate=rate_value,
-            metric="apr",
+            metric=_metric_from_key(rate_key),
             source_url=url,
             raw=product,
         )
@@ -279,23 +296,25 @@ def fetch_binance() -> Iterable[RateRecord]:
     for product in products:
         if not isinstance(product, dict):
             continue
-        rate_value = _normalize_percentage(
-            _pick_first(
-                product,
-                ("configAnnualInterestRate", "apr", "apy", "maxApy"),
-            )
+        rate_entry = _pick_first(
+            product,
+            ("configAnnualInterestRate", "apr", "apy", "maxApy"),
         )
+        if not rate_entry:
+            continue
+        rate_key, raw_rate = rate_entry
+        rate_value = _normalize_percentage(raw_rate)
         if rate_value is None:
             continue
-        network = _pick_first(
+        network_entry = _pick_first(
             product,
             ("asset", "productName", "displayName"),
         )
         yield RateRecord(
             provider="Binance",
-            network=str(network or "Unknown"),
+            network=str((network_entry[1] if network_entry else None) or "Unknown"),
             rate=rate_value,
-            metric="apr",
+            metric=_metric_from_key(rate_key),
             source_url=url,
             raw=product,
         )
@@ -314,23 +333,25 @@ def fetch_nexo() -> Iterable[RateRecord]:
     for product in products:
         if not isinstance(product, dict):
             continue
-        base_rate = _normalize_percentage(
-            _pick_first(
-                product,
-                ("rate", "apy", "apr", "baseRate"),
-            )
+        rate_entry = _pick_first(
+            product,
+            ("rate", "apy", "apr", "baseRate"),
         )
+        if not rate_entry:
+            continue
+        rate_key, raw_rate = rate_entry
+        base_rate = _normalize_percentage(raw_rate)
         if base_rate is None:
             continue
-        network = _pick_first(
+        network_entry = _pick_first(
             product,
             ("currency", "symbol", "name"),
         )
         yield RateRecord(
             provider="Nexo",
-            network=str(network or "Unknown"),
+            network=str((network_entry[1] if network_entry else None) or "Unknown"),
             rate=base_rate,
-            metric="apy",
+            metric=_metric_from_key(rate_key),
             source_url=url,
             raw=product,
         )
