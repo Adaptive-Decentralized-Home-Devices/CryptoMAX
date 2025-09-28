@@ -1,12 +1,3 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/README.md b/README.md
-index 73f8d0d01e4c2308fe827eb7566c4d71c4bffb01..a81f37682dd76f3fe4dd8fd7fc1d831ebd022df1 100644
---- a/README.md
-+++ b/README.md
-@@ -1,33 +1,103 @@
--# 🪙 Crypto Interest Rate Explorer (Android App)
-+# CryptoMAX Data Scraper
- 
 -This Android app helps users explore and compare **staking interest rates** for cryptocurrencies across reputable exchanges based on their **risk tolerance** (Low, Medium, High).
 +CryptoMAX provides a multithreaded Java data ingestion pipeline that gathers exchange listings, 
 +current gas fee estimates, and staking APR/APY snapshots. The scraper persists the normalized 
